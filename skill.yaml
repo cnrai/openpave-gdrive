@@ -1,0 +1,154 @@
+# OpenPAVE Google Drive Skill
+# Access and manage Google Drive files securely using OAuth
+
+name: gdrive
+version: 1.0.0
+description: Access and manage Google Drive files securely using OAuth
+
+author:
+  name: OpenPave
+  url: https://github.com/openpave
+
+license: MIT
+homepage: https://github.com/openpave/pave-gdrive
+repository: openpave/pave-gdrive
+
+# Execution pattern
+pattern: sandbox
+entrypoint: index.js
+
+# Available commands
+commands:
+  - name: ls
+    description: List files in a folder
+    args:
+      - "[folderId]"
+    options:
+      - --max <number>
+      - --order <field>
+      - --summary
+      - --json
+
+  - name: search
+    description: Search files by name
+    args:
+      - <query>
+    options:
+      - --max <number>
+      - --summary
+      - --json
+
+  - name: info
+    description: Get file metadata
+    args:
+      - <fileId>
+    options:
+      - --summary
+      - --json
+
+  - name: read
+    description: Read file content (text files or Google Docs)
+    args:
+      - <fileId>
+    options:
+      - -o, --output <file>
+
+  - name: download
+    description: Download a file
+    args:
+      - <fileId>
+    options:
+      - -o, --output <file>
+      - --export <mimeType>
+
+  - name: upload
+    description: Upload a file
+    args:
+      - <localPath>
+    options:
+      - -n, --name <name>
+      - -p, --parent <folderId>
+      - -t, --type <mimeType>
+      - --summary
+      - --json
+
+  - name: mkdir
+    description: Create a new folder
+    args:
+      - <name>
+    options:
+      - -p, --parent <folderId>
+      - --summary
+      - --json
+
+  - name: quota
+    description: Show storage quota
+    options:
+      - --summary
+      - --json
+
+# Token configuration for secure sandbox access
+tokens:
+  gdrive:
+    type: oauth
+    description: Google Drive API OAuth credentials
+    domains:
+      - www.googleapis.com
+      - "*.googleapis.com"
+    env:
+      required:
+        - GMAIL_CLIENT_ID
+        - GMAIL_CLIENT_SECRET
+        - GDRIVE_REFRESH_TOKEN
+      optional:
+        - GDRIVE_ACCESS_TOKEN
+    config:
+      env: GDRIVE_ACCESS_TOKEN
+      type: oauth
+      domains:
+        - www.googleapis.com
+        - "*.googleapis.com"
+      placement:
+        type: header
+        name: Authorization
+        format: "Bearer {token}"
+      refreshEnv: GDRIVE_REFRESH_TOKEN
+      refreshUrl: https://oauth2.googleapis.com/token
+      clientIdEnv: GMAIL_CLIENT_ID
+      clientSecretEnv: GMAIL_CLIENT_SECRET
+
+# Sandbox permissions
+permissions:
+  fs.read:
+    - "*"
+  fs.write:
+    - "tmp/*"
+  network:
+    - www.googleapis.com
+    - oauth2.googleapis.com
+  modules:
+    - fs
+    - path
+  system: []
+
+# Platform compatibility
+platforms:
+  - darwin
+  - linux
+  - win32
+
+engines:
+  node: ">=16.0.0"
+
+# Metadata
+keywords:
+  - drive
+  - google
+  - cloud
+  - storage
+  - files
+  - oauth
+  - documents
+
+category: productivity
+icon: "💾"
