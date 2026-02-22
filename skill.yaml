@@ -6,12 +6,12 @@ version: 1.0.0
 description: Access and manage Google Drive files securely using OAuth
 
 author:
-  name: OpenPave
-  url: https://github.com/openpave
+  name: cnrai
+  url: https://github.com/cnrai/openpave-gdrive
 
 license: MIT
-homepage: https://github.com/openpave/pave-gdrive
-repository: openpave/pave-gdrive
+homepage: https://github.com/cnrai/openpave-gdrive
+repository: cnrai/openpave-gdrive
 
 # Execution pattern
 pattern: sandbox
