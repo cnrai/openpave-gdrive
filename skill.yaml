@@ -2,7 +2,7 @@
 # Access and manage Google Drive files securely using OAuth
 
 name: gdrive
-version: 1.0.0
+version: 1.1.0
 description: Access and manage Google Drive files securely using OAuth
 
 author:
@@ -102,6 +102,13 @@ tokens:
         - GDRIVE_REFRESH_TOKEN
       optional:
         - GDRIVE_ACCESS_TOKEN
+    # OAuth authorization flow configuration (for web UI authentication)
+    oauth:
+      provider: google
+      authorizeUrl: https://accounts.google.com/o/oauth2/v2/auth
+      scopes:
+        - https://www.googleapis.com/auth/drive.readonly
+        - https://www.googleapis.com/auth/drive.file
     config:
       env: GDRIVE_ACCESS_TOKEN
       type: oauth
