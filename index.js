@@ -73,7 +73,12 @@ function parseArgs() {
 function encodeFormData(data) {
   const params = [];
   for (const [key, value] of Object.entries(data)) {
-    params.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    // encodeURIComponent doesn't encode single quotes, but they must be
+    // encoded for the Google Drive API when running through the PAVE sandbox.
+    // The sandbox's shell quoting of URLs interferes with unencoded single quotes.
+    const encodedKey = encodeURIComponent(key).replace(/'/g, '%27');
+    const encodedValue = encodeURIComponent(value).replace(/'/g, '%27');
+    params.push(`${encodedKey}=${encodedValue}`);
   }
   return params.join('&');
 }
