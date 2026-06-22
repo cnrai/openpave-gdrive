@@ -84,10 +84,98 @@ function encodeFormData(data) {
 }
 
 // Google Drive Client Class - Uses secure token system
+
+// ── PAVE Auth Proxy (replaces deprecated authenticatedFetch global) ──
+// Direct HTTP calls to the PAVE auth proxy at /proxy/:tokenName/*path
+var PAVE_PROXY_BASE = process.env.PAVE_PROXY_URL || '';
+
+function _shellQuote(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'";
+}
+
+function proxyHasToken(tokenName) {
+  if (!PAVE_PROXY_BASE) return false;
+  try {
+    var url = PAVE_PROXY_BASE.replace(/\/$/, '') + '/_tokens/' + encodeURIComponent(tokenName);
+    var out = require('child_process').execSync(
+      'curl -sS --max-time 5 ' + _shellQuote(url),
+      { encoding: 'utf8', timeout: 8000, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    var r = JSON.parse(out);
+    return r.has === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function proxyFetch(tokenName, url, options) {
+  options = options || {};
+  if (!PAVE_PROXY_BASE) {
+    throw new Error('PAVE_PROXY_URL not set - cannot reach auth proxy');
+  }
+
+  var parsed = new URL(url);
+  var proxyUrl = PAVE_PROXY_BASE.replace(/\/$/, '') + '/' + encodeURIComponent(tokenName) + parsed.pathname + parsed.search;
+  proxyUrl += (proxyUrl.indexOf('?') !== -1 ? '&' : '?') + '_mode=json';
+  if (options.saveTo) {
+    proxyUrl += '&_saveTo=' + encodeURIComponent(options.saveTo);
+  }
+
+  var method = options.method || 'GET';
+  var timeout = options.timeout || 30000;
+  var cmd = 'curl -sS -X ' + method + ' --max-time ' + Math.ceil(timeout / 1000);
+
+  var headers = Object.assign({}, options.headers || {});
+  if (options.body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  for (var k in headers) {
+    cmd += ' -H ' + _shellQuote(k + ': ' + headers[k]);
+  }
+
+  if (options.body) {
+    var bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+    cmd += ' -d ' + _shellQuote(bodyStr);
+  }
+
+  cmd += ' ' + _shellQuote(proxyUrl);
+
+  var out;
+  try {
+    out = require('child_process').execSync(cmd, {
+      encoding: 'utf8', timeout: timeout + 5000, maxBuffer: 10 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+  } catch (err) {
+    var stdout = err.stdout ? err.stdout.toString() : '';
+    var stderr = err.stderr ? err.stderr.toString() : '';
+    if (stdout) { out = stdout; } else {
+      throw new Error('Proxy request failed: ' + (stderr.trim() || err.message));
+    }
+  }
+
+  var resp;
+  try { resp = JSON.parse(out); } catch (e) {
+    return { ok: true, status: 200, headers: { get: function() { return null; } },
+      text: function() { return out; }, json: function() { return JSON.parse(out || '{}'); } };
+  }
+  if (resp.error) throw new Error(resp.error);
+  if (resp.savedTo) {
+    return { ok: resp.ok || false, status: resp.status || 200, savedTo: resp.savedTo,
+      headers: { get: function() { return null; } },
+      text: function() { return ''; }, json: function() { return {}; } };
+  }
+  return { ok: resp.ok || false, status: resp.status || 200,
+    headers: { get: function(name) { var hs = resp.headers || {}, ln = name.toLowerCase();
+      for (var key in hs) { if (key.toLowerCase() === ln) return Array.isArray(hs[key]) ? hs[key][0] : hs[key]; }
+      return null; } },
+    text: function() { return resp.body || ''; }, json: function() { return JSON.parse(resp.body || '{}'); } };
+}
+
 class GDriveClient {
   constructor() {
     // Check if gdrive token is available via secure token system
-    if (typeof hasToken === 'function' && !hasToken('gdrive')) {
+    if (!proxyHasToken('gdrive')) {
       console.error('🚫 Google Drive token not configured.');
       console.error('');
       console.error('Add to ~/.pave/permissions.yaml:');
@@ -122,7 +210,7 @@ class GDriveClient {
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
     
     // Use authenticatedFetch - token injection and OAuth refresh handled by sandbox
-    const response = authenticatedFetch('gdrive', url, {
+    const response = proxyFetch('gdrive', url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -146,7 +234,7 @@ class GDriveClient {
   requestBinary(endpoint, options = {}) {
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
     
-    const response = authenticatedFetch('gdrive', url, {
+    const response = proxyFetch('gdrive', url, {
       ...options,
       headers: {
         ...options.headers
@@ -283,7 +371,7 @@ class GDriveClient {
       closeDelim,
     ].join('');
 
-    const response = authenticatedFetch('gdrive', 
+    const response = proxyFetch('gdrive', 
       'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink', {
       method: 'POST',
       headers: {
@@ -354,49 +442,29 @@ function handleLs(client, options, positional) {
     orderBy,
   });
 
-  if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  const files = result.files || [];
-
-  if (files.length === 0) {
-    console.log('📁 No files found.');
-    return;
-  }
-
   if (options.summary) {
-    console.log(`\n📁 Found ${files.length} item(s):\n`);
+    const files = result.files || [];
+    if (files.length === 0) {
+      console.log('No files found.');
+      return;
+    }
+    console.log(`Found ${files.length} item(s):\n`);
     for (const file of files) {
       const type = GDriveClient.getFileType(file.mimeType);
       const size = GDriveClient.formatSize(file.size);
       const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
-      const icon = isFolder ? '📁' : '📄';
       const modified = new Date(file.modifiedTime).toLocaleDateString();
-      
-      console.log(`${icon} ${file.name} (${type}, ${size}) ${modified}`);
+      console.log(`  ${isFolder ? '+' : '-'} ${file.name} (${type}, ${size}) ${modified}`);
     }
     console.log('');
-    return;
-  }
-
-  // Default output
-  console.log(`📁 Found ${files.length} file(s):\n`);
-  for (const file of files) {
-    console.log(`📄 ${file.name}`);
-    console.log(`   ID: ${file.id}`);
-    console.log(`   Type: ${GDriveClient.getFileType(file.mimeType)}`);
-    console.log(`   Size: ${GDriveClient.formatSize(file.size)}`);
-    console.log(`   Modified: ${file.modifiedTime}`);
-    if (file.webViewLink) console.log(`   Link: ${file.webViewLink}`);
-    console.log('');
+  } else {
+    console.log(JSON.stringify(result));
   }
 }
 
 function handleSearch(client, options, positional) {
   if (positional.length === 0) {
-    console.error('❌ Search query is required');
+    console.error('Search query is required');
     process.exit(1);
   }
 
@@ -407,41 +475,21 @@ function handleSearch(client, options, positional) {
     pageSize: maxResults,
   });
 
-  if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  const files = result.files || [];
-
-  if (files.length === 0) {
-    console.log(`🔍 No files found matching "${query}".`);
-    return;
-  }
-
   if (options.summary) {
-    console.log(`\n🔍 Found ${files.length} result(s) for "${query}":\n`);
+    const files = result.files || [];
+    if (files.length === 0) {
+      console.log(`No files found matching "${query}".`);
+      return;
+    }
+    console.log(`Found ${files.length} result(s) for "${query}":\n`);
     for (const file of files) {
       const type = GDriveClient.getFileType(file.mimeType);
       const size = GDriveClient.formatSize(file.size);
-      const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
-      const icon = isFolder ? '📁' : '📄';
-      
-      console.log(`${icon} ${file.name} (${type}, ${size})`);
-      if (file.webViewLink) console.log(`     🔗 ${file.webViewLink}`);
+      console.log(`  ${file.name} (${type}, ${size})`);
     }
     console.log('');
-    return;
-  }
-
-  // Default output
-  console.log(`🔍 Found ${files.length} file(s) matching "${query}":\n`);
-  for (const file of files) {
-    console.log(`📄 ${file.name}`);
-    console.log(`   ID: ${file.id}`);
-    console.log(`   Type: ${GDriveClient.getFileType(file.mimeType)}`);
-    if (file.webViewLink) console.log(`   Link: ${file.webViewLink}`);
-    console.log('');
+  } else {
+    console.log(JSON.stringify(result));
   }
 }
 
@@ -454,25 +502,16 @@ function handleInfo(client, options, positional) {
   const fileId = positional[0];
   const file = client.getFile(fileId);
 
-  if (options.json) {
-    console.log(JSON.stringify(file, null, 2));
-    return;
+  if (options.summary) {
+    console.log(`File: ${file.name}`);
+    console.log(`ID: ${file.id}`);
+    console.log(`Type: ${GDriveClient.getFileType(file.mimeType)}`);
+    console.log(`Size: ${GDriveClient.formatSize(file.size)}`);
+    console.log(`Modified: ${file.modifiedTime}`);
+    if (file.webViewLink) console.log(`Link: ${file.webViewLink}`);
+  } else {
+    console.log(JSON.stringify(file));
   }
-
-  console.log(`\n📄 File: ${file.name}\n`);
-  console.log(`🆔 ID: ${file.id}`);
-  console.log(`📝 Type: ${GDriveClient.getFileType(file.mimeType)}`);
-  console.log(`🎭 MIME Type: ${file.mimeType}`);
-  console.log(`📏 Size: ${GDriveClient.formatSize(file.size)}`);
-  console.log(`📅 Created: ${file.createdTime}`);
-  console.log(`🔄 Modified: ${file.modifiedTime}`);
-  console.log(`👥 Shared: ${file.shared}`);
-  if (file.owners) {
-    console.log(`👤 Owner: ${file.owners.map(o => o.displayName || o.emailAddress).join(', ')}`);
-  }
-  if (file.webViewLink) console.log(`🔗 View Link: ${file.webViewLink}`);
-  if (file.webContentLink) console.log(`⬇️  Download Link: ${file.webContentLink}`);
-  console.log('');
 }
 
 function handleRead(client, options, positional) {
@@ -544,15 +583,11 @@ function handleUpload(client, options, positional) {
     mimeType: options.type || options.t,
   });
 
-  if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
+  if (options.summary) {
+    console.log(`Uploaded: ${result.name} (ID: ${result.id})`);
+  } else {
+    console.log(JSON.stringify(result));
   }
-
-  console.log(`\n⬆️  Uploaded: ${result.name}`);
-  console.log(`🆔 ID: ${result.id}`);
-  if (result.webViewLink) console.log(`🔗 Link: ${result.webViewLink}`);
-  console.log('');
 }
 
 function handleMkdir(client, options, positional) {
@@ -564,38 +599,29 @@ function handleMkdir(client, options, positional) {
   const name = positional[0];
   const result = client.createFolder(name, options.parent || options.p);
 
-  if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
+  if (options.summary) {
+    console.log(`Created folder: ${result.name} (ID: ${result.id})`);
+  } else {
+    console.log(JSON.stringify(result));
   }
-
-  console.log(`\n📁 Created folder: ${result.name}`);
-  console.log(`🆔 ID: ${result.id}`);
-  console.log('');
 }
 
 function handleQuota(client, options) {
   const result = client.getStorageQuota();
 
-  if (options.json) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
+  if (options.summary) {
+    const quota = result.storageQuota;
+    const user = result.user;
+    console.log(`Google Drive Storage for ${user.displayName} (${user.emailAddress})`);
+    console.log(`Used: ${GDriveClient.formatSize(quota.usage)}`);
+    console.log(`Limit: ${GDriveClient.formatSize(quota.limit)}`);
+    if (quota.limit) {
+      const percent = ((quota.usage / quota.limit) * 100).toFixed(1);
+      console.log(`Usage: ${percent}%`);
+    }
+  } else {
+    console.log(JSON.stringify(result));
   }
-
-  const quota = result.storageQuota;
-  const user = result.user;
-
-  console.log(`\n💾 Google Drive Storage for ${user.displayName} (${user.emailAddress})\n`);
-  console.log(`📊 Used: ${GDriveClient.formatSize(quota.usage)}`);
-  console.log(`📏 Limit: ${GDriveClient.formatSize(quota.limit)}`);
-  console.log(`💿 Drive: ${GDriveClient.formatSize(quota.usageInDrive)}`);
-  console.log(`🗑️  Trash: ${GDriveClient.formatSize(quota.usageInDriveTrash)}`);
-  
-  if (quota.limit) {
-    const percent = ((quota.usage / quota.limit) * 100).toFixed(1);
-    console.log(`\n📈 Usage: ${percent}%`);
-  }
-  console.log('');
 }
 
 // Main execution
@@ -617,7 +643,6 @@ function main() {
     console.error('');
     console.error('Options:');
     console.error('  --summary                    Human-readable output');
-    console.error('  --json                       JSON output');
     console.error('  -o, --output <file>          Output file path');
     console.error('');
     process.exit(1);

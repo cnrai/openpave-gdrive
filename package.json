@@ -1,0 +1,19 @@
+{
+  "name": "openpave-gdrive",
+  "version": "1.1.1",
+  "description": "Google Drive skill for PAVE - access and manage Google Drive files securely",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/gdrive.test.js"
+  },
+  "keywords": ["pave", "gdrive", "google-drive", "oauth"],
+  "author": "cnrai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cnrai/openpave-gdrive"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

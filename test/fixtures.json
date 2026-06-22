@@ -1,0 +1,49 @@
+{
+  "_comment": "Test fixture IDs for gdrive regression tests",
+  "_instructions": "Update these IDs with your own test files from Google Drive",
+  
+  "testFolder": {
+    "id": "PAVE_TEST_FOLDER_ID",
+    "description": "Root test folder (PAVE-Test-Fixtures)"
+  },
+  
+  "subfolder": {
+    "id": "PAVE_TEST_SUBFOLDER_ID",
+    "description": "A subfolder for nested tests"
+  },
+  
+  "emptyFolder": {
+    "id": "PAVE_TEST_EMPTY_FOLDER_ID",
+    "description": "An empty folder for empty listing tests"
+  },
+  
+  "textFile": {
+    "id": "PAVE_TEST_TEXT_FILE_ID",
+    "description": "A plain text file (sample.txt)"
+  },
+  
+  "csvFile": {
+    "id": "PAVE_TEST_CSV_FILE_ID",
+    "description": "A CSV file (sample.csv)"
+  },
+  
+  "googleDoc": {
+    "id": "PAVE_TEST_GDOC_ID",
+    "description": "A Google Doc for export tests"
+  },
+  
+  "googleSheet": {
+    "id": "PAVE_TEST_GSHEET_ID",
+    "description": "A Google Sheet for export tests"
+  },
+  
+  "imageFile": {
+    "id": "PAVE_TEST_IMAGE_ID",
+    "description": "A small image file (test-image.png)"
+  },
+  
+  "searchableNames": {
+    "common": "sample",
+    "unique": "PAVE-Test-Fixtures"
+  }
+}

@@ -2,7 +2,7 @@
 # Access and manage Google Drive files securely using OAuth
 
 name: gdrive
-version: 1.1.1
+version: 1.2.0
 description: Access and manage Google Drive files securely using OAuth
 
 author:
@@ -27,7 +27,6 @@ commands:
       - --max <number>
       - --order <field>
       - --summary
-      - --json
 
   - name: search
     description: Search files by name
@@ -36,7 +35,6 @@ commands:
     options:
       - --max <number>
       - --summary
-      - --json
 
   - name: info
     description: Get file metadata
@@ -44,7 +42,6 @@ commands:
       - <fileId>
     options:
       - --summary
-      - --json
 
   - name: read
     description: Read file content (text files or Google Docs)
@@ -70,7 +67,6 @@ commands:
       - -p, --parent <folderId>
       - -t, --type <mimeType>
       - --summary
-      - --json
 
   - name: mkdir
     description: Create a new folder
@@ -79,13 +75,11 @@ commands:
     options:
       - -p, --parent <folderId>
       - --summary
-      - --json
 
   - name: quota
     description: Show storage quota
     options:
       - --summary
-      - --json
 
 # Token configuration for secure sandbox access
 tokens:
