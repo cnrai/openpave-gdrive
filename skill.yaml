@@ -2,7 +2,7 @@
 # Access and manage Google Drive files securely using OAuth
 
 name: gdrive
-version: 1.2.0
+version: 1.2.1
 description: Access and manage Google Drive files securely using OAuth
 
 author:
@@ -16,6 +16,21 @@ repository: cnrai/openpave-gdrive
 # Execution pattern
 pattern: sandbox
 entrypoint: index.js
+
+usage_notes: |
+  IMPORTANT FOR AI AGENTS:
+  
+  File Management Rules:
+  - Always use -o/--output when downloading to specify the destination in tmp/
+  - When reading Google Docs, use read (returns plain text by default)
+  - For Google Docs export to specific format, use download with --export:
+    | Source Format | Export MIME Type |
+    |---------------|-----------------|
+    | Google Docs | application/pdf, text/plain, application/vnd.openxmlformats-officedocument.wordprocessingml.document |
+    | Google Sheets | text/csv, application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet |
+    | Google Slides | application/pdf, text/plain |
+  - Always save downloaded files to tmp/ directory
+  - Use search before creating folders to avoid duplicates
 
 # Available commands
 commands:
